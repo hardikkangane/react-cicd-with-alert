@@ -1,0 +1,68 @@
+pipeline {
+    agent any
+
+    environment {
+        IMAGE_NAME = "REGISTRY_URL/reactapp"
+        REMOTE_HOST = "SERVER_IP" 
+    }
+
+    stages {
+        stage('Clone GitHub Repo') {
+            steps {
+                git branch: 'main', url: 'https://github.com/hardikkangane/sample-reactjs-trading-dashboard.git'
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh 'docker build -t $IMAGE_NAME:latest .'
+            }
+        }
+
+        stage('Push Docker images to registry') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh '''
+                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                        docker push $IMAGE_NAME:latest
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy to Remote Server') {
+            steps {
+                withCredentials([sshUserPrivateKey(credentialsId: 'remote-server-ssh-key', keyFileVariable: 'SSH_KEY')]) {
+                    sh '''
+                        ssh -o StrictHostKeyChecking=no -i \$SSH_KEY root@$REMOTE_HOST '
+                            docker pull REGISTRY_URL/reactapp:latest
+                            docker stop react-ap
+                            docker rm react-app
+                            docker run -d --name react-app -p 3000:3000 REGISTRY_URL/reactapp:latest
+                        '
+                    '''
+                }
+            }
+        }
+
+        stage('Clean Workspace') {
+            steps {
+                cleanWs()
+            }
+        }
+    }
+    
+    post {
+        failure {
+            script {
+                def currentTime = new Date().format("dd-MM-yyyy HH:mm", TimeZone.getTimeZone("Asia/Kolkata"))
+                def message = "🚨 CICD FAILED 🚨:\nName: ${env.JOB_NAME}\nDateTime: ${currentTime}"
+                sh """
+                    curl -s -X POST https://api.telegram.org/bot<BOT_TOKEN>/sendMessage \\
+                    -d chat_id=CHAT_ID \\
+                    -d text="${message}"
+                """
+            }
+        }
+    }
+}
