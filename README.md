@@ -1,3 +1,4 @@
+More about this project in my blog: [Jenkins CICD with Telegram alerts](https://dev.to/hardik1808/jenkins-cicd-with-telegram-alerts-1hj8)
 
 Replace these values from the pipeline code with your own values.
 - `REGISTRY_URL`
